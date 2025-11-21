@@ -12,14 +12,11 @@ export default function Home() {
     const [feedbackColor, setFeedbackColor] = useState<string>('text-gray-700');
     const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
 
-    const getRandomWord = useCallback(async () => {
-        // const randomIndex = Math.floor(Math.random() * words.length);
-        // const word = words[randomIndex];
+    const getRandomWord = useCallback(async() => {
+        const respond = await fetch("http://localhost:8000/api/word");
+        const data = await respond.json()
 
-        const response = await fetch('/api/word');
-        const word = await response.json();
-
-        setCurrentWord(word.data);
+        setCurrentWord(data);
         setSentence('');
         setScore(0);
         setFeedbackColor('text-gray-700');
@@ -40,38 +37,60 @@ export default function Home() {
         }
     };
 
-    const handleSubmitSentence = () => {
-        if (currentWord) {
-            const newScore = scoreSentence(currentWord.word, sentence);
-            setScore(newScore);
+    const handleSubmitSentence = async () => {
+    if (!currentWord) return;
 
-            if (newScore >= 8.0) {
-                setFeedbackColor('text-success');
-            } else if (newScore >= 6.0) {
-                setFeedbackColor('text-warning');
-            } else {
-                setFeedbackColor('text-danger');
-            }
-
-            const history = JSON.parse(localStorage.getItem('wordHistory') || '[]');
-            history.push({
-                word: currentWord.word,
+    try {
+        const res = await fetch("http://localhost:8000/api/validate-sentence", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                user_id: 1,
+                word_id: currentWord.id,
                 sentence: sentence,
-                score: newScore,
-                difficulty: currentWord.difficulty,
-                timestamp: new Date().toISOString(),
-            });
-            localStorage.setItem('wordHistory', JSON.stringify(history));
-            setIsSubmitted(true);
-        }
-    };
+            }),
+        });
 
+        const data = await res.json();
+
+        const newScore = data.score;
+        setScore(newScore);
+
+        if (newScore >= 8.0) {
+            setFeedbackColor("text-success");
+        } else if (newScore >= 6.0) {
+            setFeedbackColor("text-warning");
+        } else {
+            setFeedbackColor("text-danger");
+        }
+
+        const history = JSON.parse(localStorage.getItem("wordHistory") || "[]");
+
+        history.push({
+            word: currentWord.word,
+            sentence: sentence,
+            score: newScore,
+            difficulty: currentWord.difficulty_level,
+            timestamp: new Date().toISOString(),
+        });
+
+        localStorage.setItem("wordHistory", JSON.stringify(history));
+
+        setIsSubmitted(true);
+
+    } catch (error) {
+        console.error("Error validating sentence:", error);
+        alert("API Error: cannot validate sentence");
+    }
+};
     const handleNextWord = () => {
         getRandomWord();
     };
 
-    const getDifficultyColor = (difficulty: Difficulty) => {
-        switch (difficulty) {
+    const getDifficultyColor = (difficulty_level: string) => {
+        switch (difficulty_level) {
             case "Beginner":
                 return "bg-green-200 text-green-800";
             case "Intermediate":
@@ -94,11 +113,11 @@ export default function Home() {
             <div className="bg-white p-8 rounded-2xl shadow-xl mb-6 border border-gray-100 transform hover:scale-105 transition-transform duration-300 ease-in-out">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
                     <h2 className="text-3xl md:text-4xl font-bold text-primary mb-2 sm:mb-0">{currentWord.word}</h2>
-                    <span className={`px-4 py-1 rounded-full text-sm font-semibold ${getDifficultyColor(currentWord.difficulty)} shadow-md`}>
-                        {currentWord.difficulty}
+                    <span className={`px-4 py-1 rounded-full text-sm font-semibold ${getDifficultyColor(currentWord.difficulty_level)} shadow-md`}>
+                        {currentWord.difficulty_level}
                     </span>
                 </div>
-                <p className="text-lg md:text-xl text-gray-700 mb-6 leading-relaxed">{currentWord.meaning}</p>
+                <p className="text-lg md:text-xl text-gray-700 mb-6 leading-relaxed">{currentWord.definition}</p>
 
                 <div className="mb-6">
                     <label htmlFor="sentence" className="block text-base font-medium text-gray-700 mb-2">Your Sentence:</label>
@@ -114,7 +133,7 @@ export default function Home() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0">
-                    <p className="text-2xl font-bold">Score: <span className={`${feedbackColor} transition-colors duration-300`}>{score.toFixed(1)}</span></p>
+                    <p className="text-2xl font-bold">Score: <span className={`${feedbackColor} transition-colors duration-300`}>{score !== null ? score.toFixed(1) : "0.0"}</span></p>
                     <div className="flex space-x-3">
                         {!isSubmitted ? (
                             <button
